@@ -1,0 +1,111 @@
+package com.example.covidsearchmap
+
+import android.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.covidsearchmap.databinding.ActivityMainBinding
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+
+class MainActivity : AppCompatActivity() {
+
+    lateinit var dialog: AlertDialog
+    private var linearLayoutManager: LinearLayoutManager? = null
+
+    private val binding:ActivityMainBinding by lazy {
+        ActivityMainBinding.inflate(layoutInflater)
+    }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(binding.root)
+
+        binding.textView2.setOnClickListener {
+
+        }
+
+        var data:MutableList<Report>
+
+        binding.searchButton.setOnClickListener {
+            var url = "https://covid-19-statistics.p.rapidapi.com/reports?date=${binding.yearText.text}-${binding.monthText.text}-${binding.dayText.text}&region_name=${binding.regionText.text}"
+            GlobalScope.launch {
+                data = setJson(url)
+
+
+                runOnUiThread {
+
+                    val adapter = ReportAdapter(this@MainActivity,data)
+                    binding.reportRecycleView.adapter = adapter
+                    linearLayoutManager =
+                        LinearLayoutManager(this@MainActivity,LinearLayoutManager.VERTICAL,false)
+                    binding.reportRecycleView.layoutManager = linearLayoutManager
+
+                }
+            }
+        }
+
+    }
+
+    private suspend fun setJson(URL:String):MutableList<Report> {
+        delay(3000L)
+        val client = OkHttpClient()
+
+        val request = Request.Builder()
+            .url(URL)
+            .get()
+            .addHeader("x-rapidapi-key", "0369a88e85msh257fb4ca405d81ep1c1982jsnbec30a7823ee")
+            .addHeader("x-rapidapi-host", "covid-19-statistics.p.rapidapi.com")
+            .build()
+
+        val response = client.newCall(request).execute()
+        val dataModel = response.body()?.string()
+        val jsonObject = JSONObject(dataModel)
+
+
+        val count = jsonObject.getJSONArray("data").length()
+
+        val reportData = mutableListOf<Report>()
+        val filterRegion = mutableListOf<String>()
+
+        for (i in 0 until count) {
+            val item = jsonObject.getJSONArray("data")[i].toString()
+            val reportFile = JSONObject(item)
+            val regionCount = reportFile.getString("region")
+            val regionFile = JSONObject(regionCount)
+
+            if (regionFile.getString("name") !in filterRegion){
+                filterRegion.add(regionFile.getString("name"))
+            }
+            val report = Report(
+                reportFile.getString("date"),
+                reportFile.getString("confirmed"),
+                reportFile.getString("deaths"),
+                reportFile.getString("recovered"),
+                reportFile.getString("confirmed_diff"),
+                reportFile.getString("deaths_diff"),
+                reportFile.getString("recovered_diff"),
+                reportFile.getString("last_update"),
+                reportFile.getString("active"),
+                reportFile.getString("active_diff"),
+                reportFile.getString("fatality_rate"),
+                Region(regionFile.getString("iso"),
+                    regionFile.getString("name"),
+                    regionFile.getString("province"),
+                    regionFile.getString("lat"),
+                    regionFile.getString("long"))
+            )
+
+            reportData.add(i,report)
+        }
+
+        println(filterRegion)
+
+        return reportData
+
+
+    }
+}
